@@ -19,22 +19,25 @@ router.get('/', authenticateToken, async (req, res) => {
     const { status = 'active', limit = 50, offset = 0 } = req.query;
 
     let query = `
-      SELECT a.*, s.name as station_name, s.location,
+      SELECT a.alert_id as id, a.station_id, a.reading_id, a.level as severity, 
+             a.message, a.triggered_at as created_at, a.is_acknowledged,
+             a.acknowledged_by, a.acknowledged_at,
+             s.name as station_name, s.code as station_code, s.location,
              u.username as acknowledged_by_username
       FROM alerts a
-      LEFT JOIN stations s ON a.station_id = s.id
+      LEFT JOIN stations s ON a.station_id = s.station_id
       LEFT JOIN users u ON a.acknowledged_by = u.id
       WHERE 1=1
     `;
     const params = [];
 
     if (status === 'active') {
-      query += ' AND a.is_acknowledged = FALSE';
+      query += ' AND (a.is_acknowledged = FALSE OR a.is_acknowledged IS NULL)';
     } else if (status === 'acknowledged') {
       query += ' AND a.is_acknowledged = TRUE';
     }
 
-    query += ' ORDER BY a.created_at DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY a.triggered_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
 
     const alerts = await db.query(query, params);
@@ -43,13 +46,16 @@ router.get('/', authenticateToken, async (req, res) => {
     const countQuery = `
       SELECT COUNT(*) as total 
       FROM alerts a
-      WHERE 1=1 ${status === 'active' ? 'AND a.is_acknowledged = FALSE' : status === 'acknowledged' ? 'AND a.is_acknowledged = TRUE' : ''}
+      WHERE 1=1 ${status === 'active' ? 'AND (a.is_acknowledged = FALSE OR a.is_acknowledged IS NULL)' : status === 'acknowledged' ? 'AND a.is_acknowledged = TRUE' : ''}
     `;
     const countResult = await db.query(countQuery);
     const total = countResult[0].total;
 
     res.json({
-      alerts,
+      alerts: alerts.map(alert => ({
+        ...alert,
+        stationId: alert.station_code || `DWLR-${alert.station_id}`
+      })),
       pagination: {
         total,
         limit: parseInt(limit),

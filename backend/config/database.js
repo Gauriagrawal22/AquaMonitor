@@ -1,7 +1,13 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env from backend directory
+dotenv.config({ path: join(__dirname, '../.env') });
 
 class Database {
   constructor() {
@@ -14,8 +20,6 @@ class Database {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
-      acquireTimeout: 60000,
-      timeout: 60000,
     });
   }
 

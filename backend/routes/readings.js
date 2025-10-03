@@ -19,12 +19,25 @@ router.get('/station/:stationId', authenticateToken, async (req, res) => {
     const { stationId } = req.params;
     const { limit = 100, offset = 0, startDate, endDate } = req.query;
 
+    // First get the station_id from code
+    const station = await db.query(
+      'SELECT station_id FROM stations WHERE code = ? OR station_id = ?',
+      [stationId, stationId]
+    );
+
+    if (station.length === 0) {
+      return res.status(404).json({ error: 'Station not found' });
+    }
+
+    const actualStationId = station[0].station_id;
+
     let query = `
-      SELECT id, station_id, water_level, temperature, ph_level, reading_time
-      FROM water_readings 
+      SELECT reading_id as id, station_id, water_level_m as water_level, temperature_c as temperature, 
+             NULL as ph_level, reading_time, reading_time as created_at
+      FROM readings 
       WHERE station_id = ?
     `;
-    const params = [stationId];
+    const params = [actualStationId];
 
     if (startDate) {
       query += ' AND reading_time >= ?';
@@ -44,12 +57,12 @@ router.get('/station/:stationId', authenticateToken, async (req, res) => {
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total 
-      FROM water_readings 
+      FROM readings 
       WHERE station_id = ?
       ${startDate ? 'AND reading_time >= ?' : ''}
       ${endDate ? 'AND reading_time <= ?' : ''}
     `;
-    const countParams = [stationId];
+    const countParams = [actualStationId];
     if (startDate) countParams.push(startDate);
     if (endDate) countParams.push(endDate + ' 23:59:59');
 
@@ -75,15 +88,17 @@ router.get('/station/:stationId', authenticateToken, async (req, res) => {
 router.get('/latest', authenticateToken, async (req, res) => {
   try {
     const readings = await db.query(`
-      SELECT w1.station_id, w1.water_level, w1.temperature, w1.ph_level, w1.reading_time, s.name as station_name
-      FROM water_readings w1
-      INNER JOIN stations s ON w1.station_id = s.id
+      SELECT r1.station_id, r1.water_level_m as water_level, r1.temperature_c as temperature, 
+             NULL as ph_level, r1.reading_time, 
+             s.name as station_name, s.code
+      FROM readings r1
+      INNER JOIN stations s ON r1.station_id = s.station_id
       INNER JOIN (
         SELECT station_id, MAX(reading_time) as max_time
-        FROM water_readings
+        FROM readings
         GROUP BY station_id
-      ) w2 ON w1.station_id = w2.station_id AND w1.reading_time = w2.max_time
-      ORDER BY w1.reading_time DESC
+      ) r2 ON r1.station_id = r2.station_id AND r1.reading_time = r2.max_time
+      ORDER BY r1.reading_time DESC
     `);
 
     res.json({ readings });
@@ -113,9 +128,21 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Station not found' });
     }
 
+    // Get actual station_id from code
+    const stationResult = await db.query(
+      'SELECT station_id FROM stations WHERE code = ? OR station_id = ?',
+      [stationId, stationId]
+    );
+    
+    if (stationResult.length === 0) {
+      return res.status(404).json({ error: 'Station not found' });
+    }
+    
+    const actualStationId = stationResult[0].station_id;
+    
     const result = await db.query(
-      'INSERT INTO water_readings (station_id, water_level, temperature, ph_level) VALUES (?, ?, ?, ?)',
-      [stationId, waterLevel, temperature, phLevel]
+      'INSERT INTO readings (station_id, water_level_m, temperature_c) VALUES (?, ?, ?)',
+      [actualStationId, waterLevel, temperature]
     );
 
     res.status(201).json({ 
@@ -150,29 +177,41 @@ router.get('/analytics/:stationId', authenticateToken, async (req, res) => {
         break;
     }
 
+    // Get actual station_id from code
+    const stationResult = await db.query(
+      'SELECT station_id FROM stations WHERE code = ? OR station_id = ?',
+      [stationId, stationId]
+    );
+    
+    if (stationResult.length === 0) {
+      return res.status(404).json({ error: 'Station not found' });
+    }
+    
+    const actualStationId = stationResult[0].station_id;
+    
     const analytics = await db.query(`
       SELECT 
-        AVG(water_level) as avg_water_level,
-        MIN(water_level) as min_water_level,
-        MAX(water_level) as max_water_level,
-        AVG(temperature) as avg_temperature,
-        AVG(ph_level) as avg_ph_level,
+        AVG(water_level_m) as avg_water_level,
+        MIN(water_level_m) as min_water_level,
+        MAX(water_level_m) as max_water_level,
+        AVG(temperature_c) as avg_temperature,
+        NULL as avg_ph_level,
         COUNT(*) as total_readings
-      FROM water_readings 
+      FROM readings 
       WHERE station_id = ? ${dateFilter}
-    `, [stationId]);
+    `, [actualStationId]);
 
     // Get trend data
     const trendData = await db.query(`
       SELECT 
         DATE(reading_time) as date,
-        AVG(water_level) as avg_water_level,
+        AVG(water_level_m) as avg_water_level,
         COUNT(*) as readings_count
-      FROM water_readings 
+      FROM readings 
       WHERE station_id = ? ${dateFilter}
       GROUP BY DATE(reading_time)
       ORDER BY date DESC
-    `, [stationId]);
+    `, [actualStationId]);
 
     res.json({
       analytics: analytics[0],
