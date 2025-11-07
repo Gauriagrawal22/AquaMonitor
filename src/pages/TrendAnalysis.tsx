@@ -18,6 +18,7 @@ const TrendAnalysis: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState('2024');
   const [showComparison, setShowComparison] = useState(false);
   const [activeChart, setActiveChart] = useState('seasonal');
+  
   const [seasonalData, setSeasonalData] = useState<any[]>([]);
   const [monthlyTrendData, setMonthlyTrendData] = useState<any[]>([]);
   const [districtComparison, setDistrictComparison] = useState<any[]>([]);
@@ -35,12 +36,12 @@ const TrendAnalysis: React.FC = () => {
     if (view === 'projection') setShowComparison(true);
   }, [searchParams]);
 
-  // Fetch seasonal trends
+  // Fetch seasonal data
   useEffect(() => {
     const fetchSeasonalData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_BASE_URL}/dashboard/trends/seasonal?years=5`);
+        const response = await axios.get(`${API_BASE_URL}/dashboard/trends/seasonal`);
         setSeasonalData(response.data);
       } catch (error) {
         console.error('Error fetching seasonal data:', error);
@@ -109,7 +110,7 @@ const TrendAnalysis: React.FC = () => {
   const renderChart = () => {
     if (loading) {
       return (
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="flex items-center justify-center h-full">
           <LoadingSpinner />
         </div>
       );
@@ -118,7 +119,11 @@ const TrendAnalysis: React.FC = () => {
     switch (activeChart) {
       case 'seasonal':
         if (seasonalData.length === 0) {
-          return <div className="flex items-center justify-center h-full text-slate-400">No seasonal data available</div>;
+          return (
+            <div className="flex items-center justify-center h-full text-slate-400">
+              <p>No seasonal data available</p>
+            </div>
+          );
         }
         return (
           <ResponsiveContainer width="100%" height="100%">
@@ -160,10 +165,12 @@ const TrendAnalysis: React.FC = () => {
       
       case 'monthly':
         if (monthlyTrendData.length === 0) {
-          return <div className="flex items-center justify-center h-full text-slate-400">No monthly data available</div>;
+          return (
+            <div className="flex items-center justify-center h-full text-slate-400">
+              <p>No monthly data available</p>
+            </div>
+          );
         }
-        const year1 = parseInt(selectedYear) - 1;
-        const year2 = parseInt(selectedYear);
         return (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={monthlyTrendData}>
@@ -178,8 +185,8 @@ const TrendAnalysis: React.FC = () => {
                   color: '#F3F4F6'
                 }} 
               />
-              <Line type="monotone" dataKey={year1.toString()} stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" />
-              <Line type="monotone" dataKey={year2.toString()} stroke="#14B8A6" strokeWidth={3} />
+              <Line type="monotone" dataKey="2023" stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" />
+              <Line type="monotone" dataKey="2024" stroke="#14B8A6" strokeWidth={3} />
               <Line type="monotone" dataKey="avg" stroke="#F59E0B" strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
@@ -187,7 +194,11 @@ const TrendAnalysis: React.FC = () => {
       
       case 'district':
         if (districtComparison.length === 0) {
-          return <div className="flex items-center justify-center h-full text-slate-400">No district data available</div>;
+          return (
+            <div className="flex items-center justify-center h-full text-slate-400">
+              <p>No district data available</p>
+            </div>
+          );
         }
         return (
           <div className="space-y-4 h-full overflow-y-auto p-4">
@@ -198,7 +209,7 @@ const TrendAnalysis: React.FC = () => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.1 }}
                 onClick={() => handleDistrictClick(district.name)}
-                className="flex items-center justify-between p-4 bg-slate-800/30 rounded-xl cursor-pointer hover:bg-slate-800/50 transition-all"
+                className="flex items-center justify-between p-4 bg-slate-800/30 rounded-xl"
               >
                 <div>
                   <h4 className="text-white font-medium">{district.name}</h4>

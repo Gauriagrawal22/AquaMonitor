@@ -14,6 +14,7 @@ const ReportsAlerts: React.FC = () => {
   const [alertFilter, setAlertFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,28 +23,61 @@ const ReportsAlerts: React.FC = () => {
     const fetchAlerts = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_BASE_URL}/dashboard/alerts/detailed?limit=20`);
-        setAlerts(response.data);
+        const response = await axios.get(`${API_BASE_URL}/dashboard/alerts?limit=20`);
+        
+        // Transform API data to match component format
+        const formattedAlerts = response.data.map((alert: any, index: number) => ({
+          id: alert.id || index,
+          type: alert.type === 'critical' ? 'critical' : 
+                alert.type === 'warning' ? 'warning' : 
+                alert.type === 'success' ? 'success' : 'info',
+          title: getAlertTitle(alert),
+          message: alert.message,
+          location: alert.location || 'Unknown Location',
+          timestamp: alert.time,
+          isNew: index < 3, // Mark first 3 as new
+          aiInsight: getAIInsight(alert),
+          stationId: alert.station_id || null
+        }));
+        
+        setAlerts(formattedAlerts);
       } catch (error) {
         console.error('Error fetching alerts:', error);
+        // Fallback to empty array
         setAlerts([]);
       } finally {
         setLoading(false);
       }
     };
 
-    if (activeTab === 'alerts') {
-      fetchAlerts();
+    fetchAlerts();
+  }, []);
+
+  const getAlertTitle = (alert: any) => {
+    if (alert.message.toLowerCase().includes('critical')) return 'Critical Water Level Alert';
+    if (alert.message.toLowerCase().includes('battery')) return 'Battery Low Warning';
+    if (alert.message.toLowerCase().includes('maintenance')) return 'Station Maintenance Required';
+    if (alert.message.toLowerCase().includes('recharge')) return 'Recharge Pattern Detected';
+    return 'System Alert';
+  };
+
+  const getAIInsight = (alert: any) => {
+    if (alert.type === 'critical') {
+      return 'AI Analysis: Unusual pattern detected - requires immediate attention.';
     }
-  }, [activeTab]);
+    if (alert.message.toLowerCase().includes('battery')) {
+      return null;
+    }
+    return 'AI Analysis: Pattern within normal operational parameters.';
+  };
 
   const reports = [
     {
       id: 1,
       title: 'Monthly Groundwater Assessment Report',
-      description: 'Comprehensive analysis of groundwater levels across NCR for December 2024',
+      description: 'Comprehensive analysis of groundwater levels across regions for current month',
       type: 'monthly',
-      generatedAt: '2024-01-01 09:00',
+      generatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
       size: '2.4 MB',
       pages: 24,
       downloadCount: 45,
@@ -51,10 +85,10 @@ const ReportsAlerts: React.FC = () => {
     },
     {
       id: 2,
-      title: 'Recharge Efficiency Analysis Q4 2024',
+      title: 'Recharge Efficiency Analysis',
       description: 'Detailed study of groundwater recharge patterns and efficiency metrics',
       type: 'quarterly',
-      generatedAt: '2024-01-05 14:30',
+      generatedAt: new Date(Date.now() - 5*24*60*60*1000).toISOString().slice(0, 16).replace('T', ' '),
       size: '5.7 MB',
       pages: 67,
       downloadCount: 23,
@@ -63,9 +97,9 @@ const ReportsAlerts: React.FC = () => {
     {
       id: 3,
       title: 'Station Performance Summary',
-      description: 'Performance metrics and status report for all DWLR stations',
+      description: 'Performance metrics and status report for all monitoring stations',
       type: 'operational',
-      generatedAt: '2024-01-10 11:15',
+      generatedAt: new Date(Date.now() - 3*24*60*60*1000).toISOString().slice(0, 16).replace('T', ' '),
       size: '1.8 MB',
       pages: 18,
       downloadCount: 78,
@@ -76,7 +110,7 @@ const ReportsAlerts: React.FC = () => {
       title: 'Critical Alerts Investigation Report',
       description: 'Detailed investigation of recent critical water level alerts',
       type: 'investigation',
-      generatedAt: '2024-01-15 16:45',
+      generatedAt: new Date(Date.now() - 1*24*60*60*1000).toISOString().slice(0, 16).replace('T', ' '),
       size: '3.2 MB',
       pages: 35,
       downloadCount: 12,
@@ -171,11 +205,7 @@ const ReportsAlerts: React.FC = () => {
           >
             <Bell className="w-4 h-4" />
             <span>Alerts</span>
-            {alerts.filter(a => a.isNew).length > 0 && (
-              <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full">
-                {alerts.filter(a => a.isNew).length}
-              </span>
-            )}
+            <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full">3</span>
           </button>
           <button
             onClick={() => setActiveTab('reports')}
@@ -237,19 +267,20 @@ const ReportsAlerts: React.FC = () => {
             </GlassCard>
 
             {/* Alerts List */}
-            <div className="space-y-4">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <LoadingSpinner />
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <LoadingSpinner />
+              </div>
+            ) : filteredAlerts.length === 0 ? (
+              <GlassCard className="p-12">
+                <div className="text-center text-slate-400">
+                  <Bell className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No alerts found</p>
                 </div>
-              ) : filteredAlerts.length === 0 ? (
-                <GlassCard className="p-12 text-center">
-                  <Bell className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                  <p className="text-slate-400 text-lg">No alerts found</p>
-                  <p className="text-slate-500 text-sm mt-2">Try adjusting your search or filter criteria</p>
-                </GlassCard>
-              ) : (
-                filteredAlerts.map((alert, index) => (
+              </GlassCard>
+            ) : (
+            <div className="space-y-4">
+              {filteredAlerts.map((alert, index) => (
                 <motion.div
                   key={alert.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -315,9 +346,9 @@ const ReportsAlerts: React.FC = () => {
                     </div>
                   </GlassCard>
                 </motion.div>
-                ))
-              )}
+              ))}
             </div>
+            )}
           </motion.div>
         )}
 

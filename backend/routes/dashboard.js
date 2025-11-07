@@ -239,11 +239,10 @@ router.get('/districts', async (req, res) => {
   }
 });
 
-// Get trend analysis data - seasonal trends
+// Get seasonal trend data (for trend analysis)
 router.get('/trends/seasonal', async (req, res) => {
   try {
-    const { years = 5 } = req.query;
-    
+    // Get seasonal data for last 5 years
     const seasonalData = await db.query(
       `SELECT 
         YEAR(reading_time) as year,
@@ -251,190 +250,109 @@ router.get('/trends/seasonal', async (req, res) => {
         AVG(CASE WHEN MONTH(reading_time) IN (6,7,8) THEN water_level_m END) as summer,
         AVG(CASE WHEN MONTH(reading_time) IN (9,10,11) THEN water_level_m END) as monsoon,
         AVG(CASE WHEN MONTH(reading_time) IN (12,1,2) THEN water_level_m END) as winter
-       FROM readings
-       WHERE reading_time >= DATE_SUB(NOW(), INTERVAL ? YEAR)
+       FROM readings 
+       WHERE reading_time >= DATE_SUB(NOW(), INTERVAL 5 YEAR)
        GROUP BY YEAR(reading_time)
-       ORDER BY year ASC`,
-      [parseInt(years)]
+       ORDER BY year ASC`
     );
 
-    const formatted = seasonalData.map(d => ({
-      year: d.year.toString(),
-      spring: parseFloat(d.spring || 0).toFixed(1),
-      summer: parseFloat(d.summer || 0).toFixed(1),
-      monsoon: parseFloat(d.monsoon || 0).toFixed(1),
-      winter: parseFloat(d.winter || 0).toFixed(1)
+    const formattedData = seasonalData.map(row => ({
+      year: row.year.toString(),
+      spring: parseFloat(row.spring || 0).toFixed(1),
+      summer: parseFloat(row.summer || 0).toFixed(1),
+      monsoon: parseFloat(row.monsoon || 0).toFixed(1),
+      winter: parseFloat(row.winter || 0).toFixed(1)
     }));
 
-    res.json(formatted);
+    res.json(formattedData);
   } catch (error) {
     console.error('Seasonal trends error:', error);
     res.status(500).json({ error: 'Failed to fetch seasonal trends' });
   }
 });
 
-// Get trend analysis data - monthly comparison
+// Get monthly comparison data (for trend analysis)
 router.get('/trends/monthly', async (req, res) => {
   try {
     const { year1 = new Date().getFullYear() - 1, year2 = new Date().getFullYear() } = req.query;
-    
+
     const monthlyData = await db.query(
       `SELECT 
         DATE_FORMAT(reading_time, '%b') as month,
         MONTH(reading_time) as month_num,
         YEAR(reading_time) as year,
         AVG(water_level_m) as avg_level
-       FROM readings
+       FROM readings 
        WHERE YEAR(reading_time) IN (?, ?)
        GROUP BY YEAR(reading_time), MONTH(reading_time)
-       ORDER BY month_num ASC, year ASC`,
-      [parseInt(year1), parseInt(year2)]
+       ORDER BY month_num ASC`,
+      [year1, year2]
     );
 
-    // Reorganize data by month with year columns
-    const monthMap = new Map();
+    // Organize data by month with both years
+    const monthlyMap = {};
     monthlyData.forEach(row => {
-      if (!monthMap.has(row.month)) {
-        monthMap.set(row.month, { month: row.month, month_num: row.month_num });
+      if (!monthlyMap[row.month]) {
+        monthlyMap[row.month] = { month: row.month, month_num: row.month_num };
       }
-      const monthData = monthMap.get(row.month);
-      monthData[row.year] = parseFloat(row.avg_level || 0).toFixed(1);
+      monthlyMap[row.month][row.year] = parseFloat(row.avg_level || 0).toFixed(1);
     });
 
-    // Calculate average
-    const formatted = Array.from(monthMap.values())
-      .sort((a, b) => a.month_num - b.month_num)
-      .map(data => {
-        const val1 = parseFloat(data[year1] || 0);
-        const val2 = parseFloat(data[year2] || 0);
-        return {
-          month: data.month,
-          [year1]: data[year1] || '0.0',
-          [year2]: data[year2] || '0.0',
-          avg: ((val1 + val2) / 2).toFixed(1)
-        };
-      });
+    // Calculate average across both years
+    const formattedData = Object.values(monthlyMap).map(m => {
+      const val1 = parseFloat(m[year1] || 0);
+      const val2 = parseFloat(m[year2] || 0);
+      return {
+        ...m,
+        avg: ((val1 + val2) / 2).toFixed(1)
+      };
+    });
 
-    res.json(formatted);
+    res.json(formattedData);
   } catch (error) {
-    console.error('Monthly comparison error:', error);
-    res.status(500).json({ error: 'Failed to fetch monthly comparison' });
+    console.error('Monthly trends error:', error);
+    res.status(500).json({ error: 'Failed to fetch monthly trends' });
   }
 });
 
-// Get trend analysis data - district comparison
+// Get district comparison data (for trend analysis)
 router.get('/trends/districts', async (req, res) => {
   try {
     const { year = new Date().getFullYear() } = req.query;
-    
+
     const districtData = await db.query(
       `SELECT 
-        SUBSTRING_INDEX(s.location, ',', -1) as name,
-        AVG(CASE WHEN YEAR(r.reading_time) = ? THEN r.water_level_m END) as current,
-        AVG(CASE WHEN YEAR(r.reading_time) = ? - 1 THEN r.water_level_m END) as previous
+        SUBSTRING_INDEX(s.location, ',', -1) as district_name,
+        AVG(CASE WHEN YEAR(r.reading_time) = ? THEN r.water_level_m END) as current_avg,
+        AVG(CASE WHEN YEAR(r.reading_time) = ? - 1 THEN r.water_level_m END) as previous_avg
        FROM stations s
        LEFT JOIN readings r ON s.station_id = r.station_id
-       WHERE s.is_active = 1
+       WHERE s.is_active = 1 
          AND YEAR(r.reading_time) IN (?, ? - 1)
-       GROUP BY name
-       HAVING name IS NOT NULL AND name != ''
-       ORDER BY current DESC
-       LIMIT 20`,
-      [parseInt(year), parseInt(year), parseInt(year), parseInt(year)]
+       GROUP BY district_name
+       HAVING district_name IS NOT NULL AND district_name != ''
+       ORDER BY current_avg DESC
+       LIMIT 10`,
+      [year, year, year, year]
     );
 
-    const formatted = districtData.map(d => {
-      const current = parseFloat(d.current || 0);
-      const previous = parseFloat(d.previous || 1);
+    const formattedData = districtData.map(d => {
+      const current = parseFloat(d.current_avg || 0);
+      const previous = parseFloat(d.previous_avg || 0);
       const change = previous > 0 ? ((current - previous) / previous * 100) : 0;
-      
+
       return {
-        name: d.name.trim(),
+        name: d.district_name.trim(),
         current: current.toFixed(1),
         previous: previous.toFixed(1),
         change: parseFloat(change.toFixed(1))
       };
     });
 
-    res.json(formatted);
+    res.json(formattedData);
   } catch (error) {
     console.error('District comparison error:', error);
     res.status(500).json({ error: 'Failed to fetch district comparison' });
-  }
-});
-
-// Get detailed alerts with station information
-router.get('/alerts/detailed', async (req, res) => {
-  try {
-    const { limit = 20, type = 'all' } = req.query;
-
-    let query = `
-      SELECT 
-        a.alert_id as id,
-        a.level as type,
-        a.message as message,
-        CONCAT(s.name, ' - ', s.location) as location,
-        s.code as stationId,
-        DATE_FORMAT(a.triggered_at, '%Y-%m-%d %H:%i') as timestamp,
-        TIMESTAMPDIFF(HOUR, a.triggered_at, NOW()) < 24 as isNew,
-        a.is_acknowledged,
-        r.water_level_m,
-        r.temperature_c
-       FROM alerts a
-       LEFT JOIN stations s ON a.station_id = s.station_id
-       LEFT JOIN readings r ON a.reading_id = r.reading_id
-       WHERE 1=1
-    `;
-    const params = [];
-
-    if (type !== 'all') {
-      query += ' AND a.level = ?';
-      params.push(type);
-    }
-
-    query += ' ORDER BY a.triggered_at DESC LIMIT ?';
-    params.push(parseInt(limit));
-
-    const alerts = await db.query(query, params);
-
-    const formatted = alerts.map(alert => {
-      // Generate AI insight based on alert type and data
-      let aiInsight = null;
-      if (alert.type === 'critical' && alert.water_level_m) {
-        if (alert.water_level_m < 5) {
-          aiInsight = 'AI Analysis: Critically low water level detected. Immediate investigation recommended to rule out aquifer stress or sensor malfunction.';
-        } else {
-          aiInsight = 'AI Analysis: Unusual depletion rate detected. Pattern suggests potential equipment issue or rapid groundwater extraction.';
-        }
-      } else if (alert.type === 'warning') {
-        aiInsight = 'AI Analysis: Monitoring recommended. Pattern deviation may indicate changes in local hydrogeological conditions.';
-      } else if (alert.type === 'info') {
-        aiInsight = null;
-      }
-
-      // Create title based on level
-      let title = 'System Notification';
-      if (alert.type === 'critical') title = 'Critical Water Level Alert';
-      else if (alert.type === 'warning') title = 'Water Level Warning';
-      else if (alert.type === 'info') title = 'Station Update';
-
-      return {
-        id: alert.id,
-        type: alert.type,
-        title: title,
-        message: alert.message,
-        location: alert.location,
-        stationId: alert.stationId,
-        timestamp: alert.timestamp,
-        isNew: alert.isNew === 1,
-        aiInsight: aiInsight
-      };
-    });
-
-    res.json(formatted);
-  } catch (error) {
-    console.error('Detailed alerts error:', error);
-    res.status(500).json({ error: 'Failed to fetch detailed alerts' });
   }
 });
 
