@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, AlertTriangle, Info, CheckCircle, FileText, Download, Search, Filter, Brain, Zap } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import LoadingSpinner from '../components/LoadingSpinner';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const ReportsAlerts: React.FC = () => {
   const navigate = useNavigate();
@@ -10,64 +14,28 @@ const ReportsAlerts: React.FC = () => {
   const [alertFilter, setAlertFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const alerts = [
-    {
-      id: 1,
-      type: 'critical',
-      title: 'Severe Water Level Depletion',
-      message: 'Station DWLR-2341 showing critical water level drop of 3.2m in last 48 hours',
-      location: 'North Delhi, Rohini',
-      timestamp: '2024-01-15 14:30',
-      isNew: true,
-      aiInsight: 'AI Analysis: Unusual depletion rate suggests potential aquifer stress or equipment malfunction.',
-      stationId: 'DWLR-2341'
-    },
-    {
-      id: 2,
-      type: 'warning',
-      title: 'Irregular Recharge Pattern',
-      message: 'Unusual groundwater recharge behavior detected in Gurgaon region',
-      location: 'Sector 14, Gurgaon',
-      timestamp: '2024-01-15 12:15',
-      isNew: true,
-      aiInsight: 'AI Analysis: Pattern deviation may indicate changes in local hydrogeological conditions.',
-      stationId: 'DWLR-2342'
-    },
-    {
-      id: 3,
-      type: 'info',
-      title: 'Station Maintenance Scheduled',
-      message: 'DWLR-2343 scheduled for routine maintenance on January 20th',
-      location: 'Greater Noida',
-      timestamp: '2024-01-15 10:00',
-      isNew: false,
-      aiInsight: null,
-      stationId: 'DWLR-2343'
-    },
-    {
-      id: 4,
-      type: 'success',
-      title: 'Recharge Improvement Detected',
-      message: 'Positive recharge trend observed in Dwarka monitoring zone',
-      location: 'Dwarka, Delhi',
-      timestamp: '2024-01-15 08:45',
-      isNew: false,
-      aiInsight: 'AI Analysis: Recent rainfall events have successfully replenished groundwater levels.',
-      stationId: 'DWLR-2345'
-    },
-    {
-      id: 5,
-      type: 'warning',
-      title: 'Battery Low Warning',
-      message: 'Multiple stations showing low battery levels - maintenance required',
-      location: 'Various Locations',
-      timestamp: '2024-01-14 16:20',
-      isNew: false,
-      aiInsight: null,
-      stationId: null
-    },
-  ];
+  // Fetch alerts from API
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE_URL}/dashboard/alerts/detailed?limit=20`);
+        setAlerts(response.data);
+      } catch (error) {
+        console.error('Error fetching alerts:', error);
+        setAlerts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (activeTab === 'alerts') {
+      fetchAlerts();
+    }
+  }, [activeTab]);
 
   const reports = [
     {
@@ -203,7 +171,11 @@ const ReportsAlerts: React.FC = () => {
           >
             <Bell className="w-4 h-4" />
             <span>Alerts</span>
-            <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full">3</span>
+            {alerts.filter(a => a.isNew).length > 0 && (
+              <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full">
+                {alerts.filter(a => a.isNew).length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('reports')}
@@ -266,7 +238,18 @@ const ReportsAlerts: React.FC = () => {
 
             {/* Alerts List */}
             <div className="space-y-4">
-              {filteredAlerts.map((alert, index) => (
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <LoadingSpinner />
+                </div>
+              ) : filteredAlerts.length === 0 ? (
+                <GlassCard className="p-12 text-center">
+                  <Bell className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                  <p className="text-slate-400 text-lg">No alerts found</p>
+                  <p className="text-slate-500 text-sm mt-2">Try adjusting your search or filter criteria</p>
+                </GlassCard>
+              ) : (
+                filteredAlerts.map((alert, index) => (
                 <motion.div
                   key={alert.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -332,7 +315,8 @@ const ReportsAlerts: React.FC = () => {
                     </div>
                   </GlassCard>
                 </motion.div>
-              ))}
+                ))
+              )}
             </div>
           </motion.div>
         )}

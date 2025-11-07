@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { TrendingUp, Calendar, ToggleLeft, ToggleRight, Layers, Eye, BarChart3 } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import LoadingSpinner from '../components/LoadingSpinner';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const TrendAnalysis: React.FC = () => {
   const navigate = useNavigate();
@@ -14,9 +18,13 @@ const TrendAnalysis: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState('2024');
   const [showComparison, setShowComparison] = useState(false);
   const [activeChart, setActiveChart] = useState('seasonal');
+  const [seasonalData, setSeasonalData] = useState<any[]>([]);
+  const [monthlyTrendData, setMonthlyTrendData] = useState<any[]>([]);
+  const [districtComparison, setDistrictComparison] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Handle URL parameters
-  React.useEffect(() => {
+  useEffect(() => {
     const station = searchParams.get('station');
     const period = searchParams.get('period');
     const metric = searchParams.get('metric');
@@ -26,39 +34,68 @@ const TrendAnalysis: React.FC = () => {
     if (metric === 'efficiency') setActiveChart('district');
     if (view === 'projection') setShowComparison(true);
   }, [searchParams]);
-  const seasonalData = [
-    { year: '2020', spring: 22.5, summer: 18.2, monsoon: 28.7, winter: 20.1 },
-    { year: '2021', spring: 21.8, summer: 17.5, monsoon: 30.2, winter: 19.8 },
-    { year: '2022', spring: 23.1, summer: 19.1, monsoon: 27.8, winter: 21.3 },
-    { year: '2023', spring: 22.7, summer: 18.8, monsoon: 31.5, winter: 20.9 },
-    { year: '2024', spring: 24.2, summer: 20.3, monsoon: 29.1, winter: 22.1 },
-  ];
 
-  const monthlyTrendData = [
-    { month: 'Jan', 2023: 20.5, 2024: 22.1, avg: 21.3 },
-    { month: 'Feb', 2023: 19.8, 2024: 21.8, avg: 20.8 },
-    { month: 'Mar', 2023: 21.2, 2024: 23.5, avg: 22.4 },
-    { month: 'Apr', 2023: 23.8, 2024: 25.2, avg: 24.5 },
-    { month: 'May', 2023: 18.5, 2024: 20.1, avg: 19.3 },
-    { month: 'Jun', 2023: 16.2, 2024: 18.8, avg: 17.5 },
-    { month: 'Jul', 2023: 28.7, 2024: 29.3, avg: 29.0 },
-    { month: 'Aug', 2023: 31.2, 2024: 30.5, avg: 30.9 },
-    { month: 'Sep', 2023: 26.8, 2024: 28.1, avg: 27.5 },
-    { month: 'Oct', 2023: 22.3, 2024: 24.7, avg: 23.5 },
-    { month: 'Nov', 2023: 21.1, 2024: 23.2, avg: 22.2 },
-    { month: 'Dec', 2023: 20.8, 2024: 22.8, avg: 21.8 },
-  ];
+  // Fetch seasonal trends
+  useEffect(() => {
+    const fetchSeasonalData = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE_URL}/dashboard/trends/seasonal?years=5`);
+        setSeasonalData(response.data);
+      } catch (error) {
+        console.error('Error fetching seasonal data:', error);
+        setSeasonalData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const districtComparison = [
-    { name: 'North Delhi', current: 22.5, previous: 21.3, change: 5.6 },
-    { name: 'South Delhi', current: 25.8, previous: 24.1, change: 7.1 },
-    { name: 'East Delhi', current: 19.2, previous: 20.8, change: -7.7 },
-    { name: 'West Delhi', current: 23.7, previous: 22.9, change: 3.5 },
-    { name: 'Central Delhi', current: 21.4, previous: 20.6, change: 3.9 },
-    { name: 'Gurgaon', current: 28.3, previous: 26.7, change: 6.0 },
-    { name: 'Faridabad', current: 24.9, previous: 23.5, change: 6.0 },
-    { name: 'Noida', current: 26.1, previous: 25.3, change: 3.2 },
-  ];
+    if (activeChart === 'seasonal') {
+      fetchSeasonalData();
+    }
+  }, [activeChart]);
+
+  // Fetch monthly comparison data
+  useEffect(() => {
+    const fetchMonthlyData = async () => {
+      try {
+        setLoading(true);
+        const year1 = parseInt(selectedYear) - 1;
+        const year2 = parseInt(selectedYear);
+        const response = await axios.get(`${API_BASE_URL}/dashboard/trends/monthly?year1=${year1}&year2=${year2}`);
+        setMonthlyTrendData(response.data);
+      } catch (error) {
+        console.error('Error fetching monthly data:', error);
+        setMonthlyTrendData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (activeChart === 'monthly') {
+      fetchMonthlyData();
+    }
+  }, [activeChart, selectedYear]);
+
+  // Fetch district comparison data
+  useEffect(() => {
+    const fetchDistrictData = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE_URL}/dashboard/trends/districts?year=${selectedYear}`);
+        setDistrictComparison(response.data);
+      } catch (error) {
+        console.error('Error fetching district data:', error);
+        setDistrictComparison([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (activeChart === 'district') {
+      fetchDistrictData();
+    }
+  }, [activeChart, selectedYear]);
 
   const chartTypes = [
     { id: 'seasonal', name: 'Seasonal Trends', icon: Layers },
@@ -70,13 +107,24 @@ const TrendAnalysis: React.FC = () => {
     navigate(`/map?district=${encodeURIComponent(districtName)}`);
   };
   const renderChart = () => {
+    if (loading) {
+      return (
+        <div className="w-full h-full flex items-center justify-center">
+          <LoadingSpinner />
+        </div>
+      );
+    }
+
     switch (activeChart) {
       case 'seasonal':
+        if (seasonalData.length === 0) {
+          return <div className="flex items-center justify-center h-full text-slate-400">No seasonal data available</div>;
+        }
         return (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={seasonalData}>
               <defs>
-                {['spring', 'summer', 'monsoon', 'winter'].map((season, index) => (
+                {['spring', 'summer', 'monsoon', 'winter'].map((season) => (
                   <linearGradient key={season} id={`${season}Gradient`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={
                       season === 'spring' ? '#10B981' :
@@ -111,6 +159,11 @@ const TrendAnalysis: React.FC = () => {
         );
       
       case 'monthly':
+        if (monthlyTrendData.length === 0) {
+          return <div className="flex items-center justify-center h-full text-slate-400">No monthly data available</div>;
+        }
+        const year1 = parseInt(selectedYear) - 1;
+        const year2 = parseInt(selectedYear);
         return (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={monthlyTrendData}>
@@ -125,14 +178,17 @@ const TrendAnalysis: React.FC = () => {
                   color: '#F3F4F6'
                 }} 
               />
-              <Line type="monotone" dataKey="2023" stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" />
-              <Line type="monotone" dataKey="2024" stroke="#14B8A6" strokeWidth={3} />
+              <Line type="monotone" dataKey={year1.toString()} stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" />
+              <Line type="monotone" dataKey={year2.toString()} stroke="#14B8A6" strokeWidth={3} />
               <Line type="monotone" dataKey="avg" stroke="#F59E0B" strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         );
       
       case 'district':
+        if (districtComparison.length === 0) {
+          return <div className="flex items-center justify-center h-full text-slate-400">No district data available</div>;
+        }
         return (
           <div className="space-y-4 h-full overflow-y-auto p-4">
             {districtComparison.map((district, index) => (
@@ -142,7 +198,7 @@ const TrendAnalysis: React.FC = () => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.1 }}
                 onClick={() => handleDistrictClick(district.name)}
-                className="flex items-center justify-between p-4 bg-slate-800/30 rounded-xl"
+                className="flex items-center justify-between p-4 bg-slate-800/30 rounded-xl cursor-pointer hover:bg-slate-800/50 transition-all"
               >
                 <div>
                   <h4 className="text-white font-medium">{district.name}</h4>
