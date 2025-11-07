@@ -172,4 +172,71 @@ router.get('/users', async (req, res) => {
   }
 });
 
+// Get district-wise recharge statistics
+router.get('/districts', async (req, res) => {
+  try {
+    const { year = new Date().getFullYear() } = req.query;
+
+    // Get district-wise statistics from stations (using location field as district)
+    const districtData = await db.query(
+      `SELECT 
+        SUBSTRING_INDEX(s.location, ',', -1) as district_name,
+        COUNT(DISTINCT s.station_id) as station_count,
+        AVG(r.water_level_m) as avg_level,
+        AVG(
+          (SELECT r2.water_level_m 
+           FROM readings r2 
+           WHERE r2.station_id = s.station_id 
+             AND YEAR(r2.reading_time) = ?
+           ORDER BY r2.reading_time DESC LIMIT 1)
+        ) as recent_avg,
+        AVG(
+          (SELECT r3.water_level_m 
+           FROM readings r3 
+           WHERE r3.station_id = s.station_id 
+             AND YEAR(r3.reading_time) = ? - 1
+           ORDER BY r3.reading_time DESC LIMIT 1)
+        ) as prev_year_avg
+       FROM stations s
+       LEFT JOIN readings r ON s.station_id = r.station_id 
+         AND YEAR(r.reading_time) = ?
+       WHERE s.is_active = 1
+       GROUP BY district_name
+       HAVING district_name IS NOT NULL AND district_name != ''
+       ORDER BY station_count DESC
+       LIMIT 20`,
+      [year, year, year]
+    );
+
+    const formattedDistricts = districtData.map(d => {
+      const recentAvg = parseFloat(d.recent_avg || 0);
+      const prevYearAvg = parseFloat(d.prev_year_avg || 0);
+      const rechargeRate = ((recentAvg - prevYearAvg) * 10).toFixed(1); // Estimate in mm/yr
+      
+      // Calculate efficiency (simplified: based on water level consistency)
+      const efficiency = Math.min(100, Math.max(0, 
+        50 + (recentAvg > 5 ? 30 : 0) + (d.station_count > 3 ? 20 : 10)
+      ));
+
+      // Determine trend
+      let trend = 'stable';
+      if (rechargeRate > 5) trend = 'up';
+      else if (rechargeRate < -5) trend = 'down';
+
+      return {
+        name: d.district_name.trim(),
+        recharge: Math.abs(parseFloat(rechargeRate)),
+        efficiency: Math.round(efficiency),
+        trend: trend,
+        stationCount: d.station_count
+      };
+    });
+
+    res.json(formattedDistricts);
+  } catch (error) {
+    console.error('District stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch district statistics' });
+  }
+});
+
 export default router;

@@ -15,7 +15,9 @@ const RechargeEstimation: React.FC = () => {
   const [selectedDistrict, setSelectedDistrict] = useState('all');
   const [showCustomPeriod, setShowCustomPeriod] = useState(false);
   const [rechargeData, setRechargeData] = useState<any[]>([]);
+  const [districtStats, setDistrictStats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [districtLoading, setDistrictLoading] = useState(true);
 
   // Fetch recharge data from API
   useEffect(() => {
@@ -49,16 +51,24 @@ const RechargeEstimation: React.FC = () => {
     fetchRechargeData();
   }, [selectedYear]);
 
-  const districtStats = [
-    { name: 'North Delhi', recharge: 24.5, efficiency: 68, trend: 'up' },
-    { name: 'South Delhi', recharge: 31.2, efficiency: 74, trend: 'up' },
-    { name: 'East Delhi', recharge: 19.8, efficiency: 62, trend: 'down' },
-    { name: 'West Delhi', recharge: 27.6, efficiency: 71, trend: 'up' },
-    { name: 'Central Delhi', recharge: 22.1, efficiency: 65, trend: 'stable' },
-    { name: 'Gurgaon', recharge: 35.4, efficiency: 78, trend: 'up' },
-    { name: 'Faridabad', recharge: 28.9, efficiency: 69, trend: 'stable' },
-    { name: 'Noida', recharge: 33.7, efficiency: 76, trend: 'up' },
-  ];
+  // Fetch district statistics from API
+  useEffect(() => {
+    const fetchDistrictStats = async () => {
+      try {
+        setDistrictLoading(true);
+        const response = await axios.get(`${API_BASE_URL}/dashboard/districts?year=${selectedYear}`);
+        setDistrictStats(response.data);
+      } catch (error) {
+        console.error('Error fetching district stats:', error);
+        // Fallback to empty array
+        setDistrictStats([]);
+      } finally {
+        setDistrictLoading(false);
+      }
+    };
+
+    fetchDistrictStats();
+  }, [selectedYear]);
 
   const insightCards = [
     {
@@ -272,47 +282,57 @@ const RechargeEstimation: React.FC = () => {
             </div>
             
             <div className="space-y-4 max-h-80 overflow-y-auto">
-              {districtStats.map((district, index) => (
-                <motion.div
-                  key={district.name}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.4 + index * 0.1 }}
-                  onClick={() => handleDistrictClick(district.name)}
-                  className="p-4 bg-slate-800/30 border border-slate-600/30 rounded-xl hover:bg-slate-800/50 transition-all duration-200 cursor-pointer"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-white">{district.name}</h4>
-                    <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      district.trend === 'up' 
-                        ? 'bg-emerald-500/20 text-emerald-400' 
-                        : district.trend === 'down'
-                        ? 'bg-red-500/20 text-red-400'
-                        : 'bg-slate-500/20 text-slate-400'
-                    }`}>
-                      {district.trend}
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-400">Recharge Rate</span>
-                    <span className="text-white font-medium">{district.recharge}mm/yr</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm mt-1">
-                    <span className="text-slate-400">Efficiency</span>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-teal-500 to-blue-500 rounded-full transition-all duration-300"
-                          style={{ width: `${district.efficiency}%` }}
-                        />
+              {districtLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <LoadingSpinner />
+                </div>
+              ) : districtStats.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <p>No district data available</p>
+                </div>
+              ) : (
+                districtStats.map((district, index) => (
+                  <motion.div
+                    key={district.name}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.4 + index * 0.1 }}
+                    onClick={() => handleDistrictClick(district.name)}
+                    className="p-4 bg-slate-800/30 border border-slate-600/30 rounded-xl hover:bg-slate-800/50 transition-all duration-200 cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-white">{district.name}</h4>
+                      <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        district.trend === 'up' 
+                          ? 'bg-emerald-500/20 text-emerald-400' 
+                          : district.trend === 'down'
+                          ? 'bg-red-500/20 text-red-400'
+                          : 'bg-slate-500/20 text-slate-400'
+                      }`}>
+                        {district.trend}
                       </div>
-                      <span className="text-white font-medium">{district.efficiency}%</span>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
+                    
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-400">Recharge Rate</span>
+                      <span className="text-white font-medium">{district.recharge}mm/yr</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-sm mt-1">
+                      <span className="text-slate-400">Efficiency</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-teal-500 to-blue-500 rounded-full transition-all duration-300"
+                            style={{ width: `${district.efficiency}%` }}
+                          />
+                        </div>
+                        <span className="text-white font-medium">{district.efficiency}%</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              )}
             </div>
           </GlassCard>
         </motion.div>
