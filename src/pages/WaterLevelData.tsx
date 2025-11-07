@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Database, Download, Filter, Calendar, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import LoadingSpinner from '../components/LoadingSpinner';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const WaterLevelData: React.FC = () => {
   const navigate = useNavigate();
@@ -15,13 +19,69 @@ const WaterLevelData: React.FC = () => {
   const [dateRange, setDateRange] = useState('30d');
   const [sortBy, setSortBy] = useState('date');
   const [showExportModal, setShowExportModal] = useState(false);
+  const [waterLevelData, setWaterLevelData] = useState<any[]>([]);
+  const [stations, setStations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Set initial station if coming from URL parameter
-  React.useEffect(() => {
+  useEffect(() => {
     if (stationParam) {
       setSelectedStation(stationParam);
     }
   }, [stationParam]);
+
+  // Fetch stations and water level data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE_URL}/stations`);
+        
+        const stationsData = response.data.stations;
+        setStations(stationsData);
+
+        // Transform to water level data format
+        const waterData = stationsData.map((station: any) => {
+          const currentLevel = station.lastReading || 0;
+          const previousLevel = currentLevel * 0.95; // Simplified trend calculation
+          const change = currentLevel - previousLevel;
+          
+          return {
+            id: station.id,
+            station: station.name,
+            location: station.location,
+            currentLevel: parseFloat(currentLevel.toFixed(1)),
+            trend: change > 0.5 ? 'up' : change < -0.5 ? 'down' : 'stable',
+            change: parseFloat(change.toFixed(1)),
+            lastUpdated: station.lastReadingTime ? new Date(station.lastReadingTime).toLocaleString() : 'N/A',
+            readings: station.dataPoints || 0,
+            sparkline: [
+              { value: currentLevel * 0.92 },
+              { value: currentLevel * 0.95 },
+              { value: currentLevel * 0.98 },
+              { value: currentLevel * 0.96 },
+              { value: currentLevel * 1.01 },
+              { value: currentLevel * 0.99 },
+              { value: currentLevel }
+            ],
+          };
+        });
+
+        setWaterLevelData(waterData);
+      } catch (error) {
+        console.error('Error fetching water level data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Filter data based on selected station
+  const filteredData = selectedStation === 'all' 
+    ? waterLevelData 
+    : waterLevelData.filter(item => item.id === selectedStation);
 
   const mockSparklineData = [
     { value: 20.5 },
@@ -31,64 +91,6 @@ const WaterLevelData: React.FC = () => {
     { value: 22.3 },
     { value: 21.8 },
     { value: 20.9 },
-  ];
-
-  const waterLevelData = [
-    {
-      id: 'DWLR-2341',
-      station: 'Delhi North Station',
-      location: 'Rohini, Delhi',
-      currentLevel: 22.5,
-      trend: 'down',
-      change: -1.2,
-      lastUpdated: '2024-01-15 14:30',
-      readings: 847,
-      sparkline: mockSparklineData,
-    },
-    {
-      id: 'DWLR-2342',
-      station: 'Gurgaon Central',
-      location: 'Sector 14, Gurgaon',
-      currentLevel: 18.2,
-      trend: 'up',
-      change: +0.8,
-      lastUpdated: '2024-01-15 14:28',
-      readings: 623,
-      sparkline: mockSparklineData,
-    },
-    {
-      id: 'DWLR-2343',
-      station: 'Noida Extension',
-      location: 'Greater Noida',
-      currentLevel: 25.1,
-      trend: 'stable',
-      change: 0.1,
-      lastUpdated: '2024-01-15 14:25',
-      readings: 392,
-      sparkline: mockSparklineData,
-    },
-    {
-      id: 'DWLR-2344',
-      station: 'Faridabad South',
-      location: 'Sector 21, Faridabad',
-      currentLevel: 19.8,
-      trend: 'down',
-      change: -2.1,
-      lastUpdated: '2024-01-15 14:32',
-      readings: 756,
-      sparkline: mockSparklineData,
-    },
-    {
-      id: 'DWLR-2345',
-      station: 'Dwarka Station',
-      location: 'Dwarka, Delhi',
-      currentLevel: 23.7,
-      trend: 'up',
-      change: +1.5,
-      lastUpdated: '2024-01-15 14:29',
-      readings: 934,
-      sparkline: mockSparklineData,
-    },
   ];
 
   const getTrendIcon = (trend: string) => {
@@ -150,11 +152,11 @@ const WaterLevelData: React.FC = () => {
                 className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-teal-400"
               >
                 <option value="all">All Stations</option>
-                <option value="DWLR-2341">Delhi North</option>
-                <option value="DWLR-2342">Gurgaon Central</option>
-                <option value="DWLR-2343">Noida Extension</option>
-                <option value="DWLR-2344">Faridabad South</option>
-                <option value="DWLR-2345">Dwarka Station</option>
+                {stations.map(station => (
+                  <option key={station.id} value={station.id}>
+                    {station.name}
+                  </option>
+                ))}
               </select>
             </div>
             
@@ -208,7 +210,15 @@ const WaterLevelData: React.FC = () => {
         </div>
       </GlassCard>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <LoadingSpinner />
+        </div>
+      )}
+
       {/* Data Table */}
+      {!loading && (
       <GlassCard className="overflow-hidden">
         <div className="p-6 border-b border-slate-700/50">
           <div className="flex items-center space-x-3">
@@ -234,7 +244,7 @@ const WaterLevelData: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {waterLevelData.map((item, index) => (
+              {filteredData.map((item, index) => (
                 <motion.tr
                   key={item.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -316,6 +326,7 @@ const WaterLevelData: React.FC = () => {
           </table>
         </div>
       </GlassCard>
+      )}
 
       {/* Export Modal */}
       <AnimatePresence>
