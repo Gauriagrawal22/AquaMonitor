@@ -1,55 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Shield, Settings, Plus, Edit3, Trash2, Eye, Check, X } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import LoadingSpinner from '../components/LoadingSpinner';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const UserRoles: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState<number | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const users = [
-    {
-      id: 1,
-      name: 'Dr. Sarah Johnson',
-      email: 'sarah.johnson@aquamonitor.com',
-      role: 'admin',
-      status: 'active',
-      lastLogin: '2024-01-15 14:30',
-      permissions: ['read', 'write', 'delete', 'manage'],
-      avatar: 'SJ'
-    },
-    {
-      id: 2,
-      name: 'Prof. Michael Chen',
-      email: 'michael.chen@university.edu',
-      role: 'researcher',
-      status: 'active',
-      lastLogin: '2024-01-15 12:15',
-      permissions: ['read', 'write', 'analyze'],
-      avatar: 'MC'
-    },
-    {
-      id: 3,
-      name: 'Emma Rodriguez',
-      email: 'emma.rodriguez@planning.gov',
-      role: 'planner',
-      status: 'active',
-      lastLogin: '2024-01-14 16:45',
-      permissions: ['read', 'reports'],
-      avatar: 'ER'
-    },
-    {
-      id: 4,
-      name: 'James Wilson',
-      email: 'james.wilson@contractor.com',
-      role: 'researcher',
-      status: 'inactive',
-      lastLogin: '2024-01-10 09:20',
-      permissions: ['read'],
-      avatar: 'JW'
-    },
-  ];
+  // Fetch users from API
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE_URL}/dashboard/users`);
+        setUsers(response.data);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        // Fallback to sample data
+        setUsers([
+          {
+            id: 1,
+            name: 'Dr. Sarah Johnson',
+            email: 'sarah.johnson@aquamonitor.com',
+            role: 'admin',
+            status: 'active',
+            lastLogin: '2024-01-15 14:30',
+            permissions: ['read', 'write', 'delete', 'manage'],
+            avatar: 'SJ'
+          },
+          {
+            id: 2,
+            name: 'Prof. Michael Chen',
+            email: 'michael.chen@university.edu',
+            role: 'researcher',
+            status: 'active',
+            lastLogin: '2024-01-15 12:15',
+            permissions: ['read', 'write', 'analyze'],
+            avatar: 'MC'
+          },
+          {
+            id: 3,
+            name: 'Emma Rodriguez',
+            email: 'emma.rodriguez@planning.gov',
+            role: 'planner',
+            status: 'active',
+            lastLogin: '2024-01-14 16:45',
+            permissions: ['read', 'reports'],
+            avatar: 'ER'
+          },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
 
   const roleDefinitions = [
     {
@@ -167,6 +180,14 @@ const UserRoles: React.FC = () => {
         </div>
       </GlassCard>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <LoadingSpinner />
+        </div>
+      )}
+
+      {!loading && (
       <AnimatePresence mode="wait">
         {activeTab === 'users' && (
           <motion.div
@@ -388,6 +409,7 @@ const UserRoles: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      )}
 
       {/* Add User Modal */}
       <AnimatePresence>

@@ -1,30 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Droplets, Calendar, Download, TrendingUp, Cloud, Zap } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import LoadingSpinner from '../components/LoadingSpinner';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const RechargeEstimation: React.FC = () => {
   const navigate = useNavigate();
   const [selectedYear, setSelectedYear] = useState('2024');
   const [selectedDistrict, setSelectedDistrict] = useState('all');
   const [showCustomPeriod, setShowCustomPeriod] = useState(false);
+  const [rechargeData, setRechargeData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const rechargeData = [
-    { month: 'Jan', recharge: 15.2, rainfall: 2.1, groundwater: 8.7 },
-    { month: 'Feb', recharge: 18.1, rainfall: 3.4, groundwater: 9.2 },
-    { month: 'Mar', recharge: 22.5, rainfall: 8.9, groundwater: 10.1 },
-    { month: 'Apr', recharge: 28.3, rainfall: 15.2, groundwater: 12.4 },
-    { month: 'May', recharge: 35.1, rainfall: 28.7, groundwater: 15.8 },
-    { month: 'Jun', recharge: 42.8, rainfall: 95.3, groundwater: 22.1 },
-    { month: 'Jul', recharge: 58.7, rainfall: 187.4, groundwater: 28.9 },
-    { month: 'Aug', recharge: 62.4, rainfall: 201.6, groundwater: 31.2 },
-    { month: 'Sep', recharge: 45.2, rainfall: 118.3, groundwater: 25.7 },
-    { month: 'Oct', recharge: 31.8, rainfall: 32.1, groundwater: 18.4 },
-    { month: 'Nov', recharge: 24.6, rainfall: 8.7, groundwater: 13.2 },
-    { month: 'Dec', recharge: 19.3, rainfall: 3.2, groundwater: 10.5 },
-  ];
+  // Fetch recharge data from API
+  useEffect(() => {
+    const fetchRechargeData = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE_URL}/dashboard/recharge?year=${selectedYear}`);
+        setRechargeData(response.data);
+      } catch (error) {
+        console.error('Error fetching recharge data:', error);
+        // Fallback to sample data
+        setRechargeData([
+          { month: 'Jan', recharge: 15.2, rainfall: 2.1, groundwater: 8.7 },
+          { month: 'Feb', recharge: 18.1, rainfall: 3.4, groundwater: 9.2 },
+          { month: 'Mar', recharge: 22.5, rainfall: 8.9, groundwater: 10.1 },
+          { month: 'Apr', recharge: 28.3, rainfall: 15.2, groundwater: 12.4 },
+          { month: 'May', recharge: 35.1, rainfall: 28.7, groundwater: 15.8 },
+          { month: 'Jun', recharge: 42.8, rainfall: 95.3, groundwater: 22.1 },
+          { month: 'Jul', recharge: 58.7, rainfall: 187.4, groundwater: 28.9 },
+          { month: 'Aug', recharge: 62.4, rainfall: 201.6, groundwater: 31.2 },
+          { month: 'Sep', recharge: 45.2, rainfall: 118.3, groundwater: 25.7 },
+          { month: 'Oct', recharge: 31.8, rainfall: 32.1, groundwater: 18.4 },
+          { month: 'Nov', recharge: 24.6, rainfall: 8.7, groundwater: 13.2 },
+          { month: 'Dec', recharge: 19.3, rainfall: 3.2, groundwater: 10.5 },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRechargeData();
+  }, [selectedYear]);
 
   const districtStats = [
     { name: 'North Delhi', recharge: 24.5, efficiency: 68, trend: 'up' },
@@ -165,6 +188,11 @@ const RechargeEstimation: React.FC = () => {
             </div>
             
             <div className="h-80">
+              {loading ? (
+                <div className="w-full h-full flex items-center justify-center">
+                  <LoadingSpinner />
+                </div>
+              ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={rechargeData}>
                   <defs>
@@ -206,6 +234,7 @@ const RechargeEstimation: React.FC = () => {
                   />
                 </AreaChart>
               </ResponsiveContainer>
+              )}
             </div>
 
             {/* Legend */}

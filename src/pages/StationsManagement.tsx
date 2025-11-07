@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, MapPin, Activity, Calendar, Settings, Plus, Eye } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import LoadingSpinner from '../components/LoadingSpinner';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const StationsManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -10,81 +14,43 @@ const StationsManagement: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [stations, setStations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const stations = [
-    {
-      id: 'DWLR-2341',
-      name: 'Delhi North Station',
-      location: 'Rohini, Delhi',
-      lat: 28.7041,
-      lng: 77.1025,
-      status: 'active',
-      lastReading: '22.5m',
-      installDate: '2023-01-15',
-      battery: 87,
-      dataPoints: 2847,
-    },
-    {
-      id: 'DWLR-2342',
-      name: 'Gurgaon Central',
-      location: 'Sector 14, Gurgaon',
-      lat: 28.4595,
-      lng: 77.0266,
-      status: 'warning',
-      lastReading: '18.2m',
-      installDate: '2023-02-10',
-      battery: 23,
-      dataPoints: 1956,
-    },
-    {
-      id: 'DWLR-2343',
-      name: 'Noida Extension',
-      location: 'Greater Noida',
-      lat: 28.4744,
-      lng: 77.5040,
-      status: 'inactive',
-      lastReading: 'N/A',
-      installDate: '2022-11-20',
-      battery: 0,
-      dataPoints: 892,
-    },
-    {
-      id: 'DWLR-2344',
-      name: 'Faridabad South',
-      location: 'Sector 21, Faridabad',
-      lat: 28.4089,
-      lng: 77.3178,
-      status: 'active',
-      lastReading: '25.1m',
-      installDate: '2023-03-05',
-      battery: 94,
-      dataPoints: 3241,
-    },
-    {
-      id: 'DWLR-2345',
-      name: 'Dwarka Station',
-      location: 'Dwarka, Delhi',
-      lat: 28.5921,
-      lng: 77.0460,
-      status: 'active',
-      lastReading: '19.8m',
-      installDate: '2023-01-30',
-      battery: 76,
-      dataPoints: 2654,
-    },
-    {
-      id: 'DWLR-2346',
-      name: 'Vasant Kunj Monitor',
-      location: 'Vasant Kunj, Delhi',
-      lat: 28.5244,
-      lng: 77.1589,
-      status: 'maintenance',
-      lastReading: '21.3m',
-      installDate: '2022-12-12',
-      battery: 45,
-      dataPoints: 1743,
-    },
-  ];
+  // Fetch stations from API
+  useEffect(() => {
+    const fetchStations = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE_URL}/stations`);
+        
+        // Transform API data to match component format
+        const transformedStations = response.data.stations.map((station: any) => ({
+          id: station.code || station.id,
+          name: station.name,
+          location: station.location || 'Unknown',
+          lat: parseFloat(station.latitude),
+          lng: parseFloat(station.longitude),
+          status: station.status || 'active',
+          lastReading: station.lastReading ? `${station.lastReading}m` : 'N/A',
+          installDate: station.installDate ? new Date(station.installDate).toISOString().split('T')[0] : 'N/A',
+          battery: station.battery_level || 0,
+          dataPoints: station.dataPoints || 0,
+        }));
+
+        setStations(transformedStations);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching stations:', err);
+        setError('Failed to load stations from database');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStations();
+  }, []);
 
   const filteredStations = stations.filter(station => {
     const matchesSearch = station.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -196,7 +162,28 @@ const StationsManagement: React.FC = () => {
         </div>
       </GlassCard>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <LoadingSpinner />
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <GlassCard className="p-8 text-center">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors"
+          >
+            Retry
+          </button>
+        </GlassCard>
+      )}
+
       {/* Stations Grid */}
+      {!loading && !error && (
       <AnimatePresence mode="wait">
         {viewMode === 'grid' && (
           <motion.div
@@ -311,6 +298,7 @@ const StationsManagement: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      )}
 
       {/* Add Station Modal */}
       <AnimatePresence>

@@ -106,4 +106,70 @@ router.get('/alerts', async (req, res) => {
   }
 });
 
+// Get recharge estimation data (monthly aggregated)
+router.get('/recharge', async (req, res) => {
+  try {
+    const { year = new Date().getFullYear() } = req.query;
+
+    // Get monthly recharge data (based on water level changes)
+    const rechargeData = await db.query(
+      `SELECT 
+        DATE_FORMAT(reading_time, '%b') as month,
+        MONTH(reading_time) as month_num,
+        AVG(water_level_m) as avg_level,
+        MAX(water_level_m) - MIN(water_level_m) as recharge_estimate,
+        COUNT(*) as reading_count
+       FROM readings 
+       WHERE YEAR(reading_time) = ?
+       GROUP BY YEAR(reading_time), MONTH(reading_time)
+       ORDER BY month_num ASC`,
+      [year]
+    );
+
+    const formattedData = rechargeData.map(r => ({
+      month: r.month,
+      recharge: parseFloat((r.recharge_estimate || 0) * 10).toFixed(1), // Convert to mm estimate
+      rainfall: parseFloat((r.recharge_estimate || 0) * 15).toFixed(1), // Simplified rainfall estimate
+      groundwater: parseFloat(r.avg_level || 0).toFixed(1)
+    }));
+
+    res.json(formattedData);
+  } catch (error) {
+    console.error('Recharge data error:', error);
+    res.status(500).json({ error: 'Failed to fetch recharge estimation data' });
+  }
+});
+
+// Get all users
+router.get('/users', async (req, res) => {
+  try {
+    const users = await db.query(
+      `SELECT 
+        id,
+        username as name,
+        email,
+        role,
+        created_at,
+        updated_at
+       FROM users
+       ORDER BY created_at DESC`
+    );
+
+    const formattedUsers = users.map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: 'active', // Default to active (add status column to DB if needed)
+      lastLogin: user.updated_at,
+      avatar: user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    }));
+
+    res.json(formattedUsers);
+  } catch (error) {
+    console.error('Users fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
 export default router;
