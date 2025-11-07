@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import stationsRoutes from './routes/stations.js';
 import readingsRoutes from './routes/readings.js';
 import alertsRoutes from './routes/alerts.js';
+import dashboardRoutes from './routes/dashboard.js';
 
 dotenv.config();
 
@@ -27,9 +28,9 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS configuration
+// CORS configuration - Allow both default and alternative ports
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: ['http://localhost:5173', 'http://localhost:5174', process.env.FRONTEND_URL].filter(Boolean),
   credentials: true
 }));
 
@@ -60,6 +61,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/stations', stationsRoutes);
 app.use('/api/readings', readingsRoutes);
 app.use('/api/alerts', alertsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Error handling middleware
 app.use((error, req, res, next) => {

@@ -1,26 +1,79 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { Droplets, TrendingUp, AlertTriangle, MapPin, Activity, Waves } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import LoadingSpinner from '../components/LoadingSpinner';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
-  const mockData = [
+  // State for real data
+  const [trendData, setTrendData] = useState([
     { name: 'Jan', value: 24.5, recharge: 15.2 },
     { name: 'Feb', value: 23.8, recharge: 18.1 },
     { name: 'Mar', value: 22.1, recharge: 22.5 },
     { name: 'Apr', value: 20.5, recharge: 28.3 },
     { name: 'May', value: 19.2, recharge: 35.1 },
     { name: 'Jun', value: 18.8, recharge: 42.8 },
-  ];
+  ]);
+  const [stats, setStats] = useState({
+    avgWaterLevel: '21.2',
+    rechargeRate: '15.8',
+    activeStations: '1,247',
+    criticalAlerts: '8'
+  });
+  const [alerts, setAlerts] = useState([
+    { id: 1, type: 'critical', message: 'Loading alerts...', time: '' },
+  ]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch dashboard data on mount
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+
+        // Fetch statistics
+        const statsRes = await axios.get(`${API_BASE_URL}/dashboard/stats`);
+        setStats({
+          avgWaterLevel: `${statsRes.data.avgWaterLevel}m`,
+          rechargeRate: `${statsRes.data.rechargeRate}%`,
+          activeStations: statsRes.data.activeStations.toLocaleString(),
+          criticalAlerts: statsRes.data.criticalAlerts.toString()
+        });
+
+        // Fetch trend data
+        const trendsRes = await axios.get(`${API_BASE_URL}/dashboard/trends`);
+        if (trendsRes.data && trendsRes.data.length > 0) {
+          setTrendData(trendsRes.data);
+        }
+
+        // Fetch recent alerts
+        const alertsRes = await axios.get(`${API_BASE_URL}/dashboard/alerts?limit=3`);
+        if (alertsRes.data && alertsRes.data.length > 0) {
+          setAlerts(alertsRes.data);
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        setLoading(false);
+        // Keep default/sample data on error
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
 
   const metricCards = [
     {
       title: 'Average Depth',
-      value: '21.2m',
+      value: stats.avgWaterLevel,
       change: '-2.3%',
       trend: 'down',
       icon: Droplets,
@@ -29,7 +82,7 @@ const Dashboard: React.FC = () => {
     },
     {
       title: 'Recharge Rate',
-      value: '15.8%',
+      value: stats.rechargeRate,
       change: '+5.2%',
       trend: 'up',
       icon: TrendingUp,
@@ -38,7 +91,7 @@ const Dashboard: React.FC = () => {
     },
     {
       title: 'Active Stations',
-      value: '1,247',
+      value: stats.activeStations,
       change: '+12',
       trend: 'up',
       icon: MapPin,
@@ -47,19 +100,13 @@ const Dashboard: React.FC = () => {
     },
     {
       title: 'Critical Alerts',
-      value: '8',
+      value: stats.criticalAlerts,
       change: '+3',
       trend: 'up',
       icon: AlertTriangle,
       color: 'from-red-500 to-pink-500',
       link: '/reports'
     }
-  ];
-
-  const alerts = [
-    { id: 1, type: 'critical', message: 'Severe depletion detected in North Delhi', time: '2 hours ago' },
-    { id: 2, type: 'warning', message: 'Unusual recharge pattern in Gurgaon', time: '4 hours ago' },
-    { id: 3, type: 'info', message: 'New station installation completed', time: '6 hours ago' },
   ];
 
   return (
@@ -131,8 +178,13 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mockData}>
+            {loading ? (
+              <div className="w-full h-96 flex items-center justify-center">
+                <LoadingSpinner />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trendData}>
                 <defs>
                   <linearGradient id="waterLevel" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#14B8A6" stopOpacity={0.3}/>
@@ -170,8 +222,9 @@ const Dashboard: React.FC = () => {
                   fill="url(#recharge)"
                   strokeWidth={2}
                 />
-              </AreaChart>
-            </ResponsiveContainer>
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </GlassCard>
         </motion.div>
 
