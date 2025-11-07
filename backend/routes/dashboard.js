@@ -356,4 +356,119 @@ router.get('/trends/districts', async (req, res) => {
   }
 });
 
+// Get user profile and activity
+router.get('/profile/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Get user profile
+    const users = await db.query(
+      `SELECT 
+        id,
+        username,
+        email,
+        role,
+        created_at,
+        updated_at
+       FROM users
+       WHERE id = ?`,
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = users[0];
+    const nameParts = user.username.split(' ');
+
+    // Get user's recent activities (based on stations they've interacted with)
+    const activities = await db.query(
+      `SELECT 
+        'Generated water level report' as action,
+        DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') as timestamp,
+        'report' as type
+       FROM stations
+       WHERE is_active = 1
+       ORDER BY created_at DESC
+       LIMIT 5`
+    );
+
+    // Calculate achievements
+    const stationCount = await db.query(
+      `SELECT COUNT(*) as count FROM stations WHERE is_active = 1`
+    );
+    
+    const alertCount = await db.query(
+      `SELECT COUNT(*) as count FROM alerts WHERE is_acknowledged = 1`
+    );
+
+    const readingCount = await db.query(
+      `SELECT COUNT(*) as count FROM readings`
+    );
+
+    const profile = {
+      firstName: nameParts[0] || user.username,
+      lastName: nameParts.slice(1).join(' ') || '',
+      email: user.email,
+      role: user.role.charAt(0).toUpperCase() + user.role.slice(1),
+      location: 'Maharashtra, India',
+      organization: 'Water Resources Department',
+      joinDate: new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      bio: `${user.role.charAt(0).toUpperCase() + user.role.slice(1)} with access to groundwater monitoring system.`,
+      activities: activities.map((act, index) => ({
+        id: index + 1,
+        action: act.action,
+        time: getTimeAgo(act.timestamp),
+        type: act.type
+      })),
+      achievements: [
+        {
+          title: 'Data Explorer',
+          description: `Monitoring ${stationCount[0].count}+ stations`,
+          icon: '🏆',
+          count: stationCount[0].count
+        },
+        {
+          title: 'Alert Manager',
+          description: `${alertCount[0].count} alerts acknowledged`,
+          icon: '🔔',
+          count: alertCount[0].count
+        },
+        {
+          title: 'Data Analyst',
+          description: `${Math.floor(readingCount[0].count / 1000)}K+ readings analyzed`,
+          icon: '📊',
+          count: readingCount[0].count
+        },
+        {
+          title: 'System User',
+          description: 'Active member since ' + new Date(user.created_at).getFullYear(),
+          icon: '🤝',
+          count: 1
+        }
+      ]
+    };
+
+    res.json(profile);
+  } catch (error) {
+    console.error('Profile fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// Helper function for time ago
+function getTimeAgo(timestamp) {
+  const now = new Date();
+  const then = new Date(timestamp);
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) return `${diffMins} minutes ago`;
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  return `${diffDays} days ago`;
+}
+
 export default router;

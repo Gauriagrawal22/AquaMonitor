@@ -1,35 +1,71 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User, Mail, MapPin, Calendar, Award, Edit3, Save, X, Camera } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import LoadingSpinner from '../components/LoadingSpinner';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const UserProfile: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState({
-    firstName: 'Dr. Sarah',
-    lastName: 'Johnson',
-    email: 'sarah.johnson@aquamonitor.com',
-    role: 'Senior Researcher',
-    location: 'New Delhi, India',
-    organization: 'National Water Research Institute',
-    joinDate: 'March 2023',
-    bio: 'Hydrogeologist with 15+ years of experience in groundwater management and sustainability research.'
+    firstName: '',
+    lastName: '',
+    email: '',
+    role: '',
+    location: '',
+    organization: '',
+    joinDate: '',
+    bio: ''
   });
+  const [activities, setActivities] = useState<any[]>([]);
+  const [achievements, setAchievements] = useState<any[]>([]);
 
-  const activities = [
-    { id: 1, action: 'Generated comprehensive water level report', time: '2 hours ago', type: 'report' },
-    { id: 2, action: 'Updated station metadata for DWLR-2341', time: '5 hours ago', type: 'update' },
-    { id: 3, action: 'Analyzed recharge patterns in Sector 14', time: '1 day ago', type: 'analysis' },
-    { id: 4, action: 'Created new monitoring alert', time: '2 days ago', type: 'alert' },
-    { id: 5, action: 'Exported dataset for external collaboration', time: '3 days ago', type: 'export' },
-  ];
+  // Fetch user profile data
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        // Using user ID 1 (admin) as default - in a real app, this would come from auth context
+        const response = await axios.get(`${API_BASE_URL}/dashboard/profile/1`);
+        
+        setProfileData({
+          firstName: response.data.firstName,
+          lastName: response.data.lastName,
+          email: response.data.email,
+          role: response.data.role,
+          location: response.data.location,
+          organization: response.data.organization,
+          joinDate: response.data.joinDate,
+          bio: response.data.bio
+        });
+        
+        setActivities(response.data.activities || []);
+        setAchievements(response.data.achievements || []);
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+        // Fallback to default data
+        setProfileData({
+          firstName: 'Admin',
+          lastName: 'User',
+          email: 'admin@aquamonitor.com',
+          role: 'Administrator',
+          location: 'Maharashtra, India',
+          organization: 'Water Resources Department',
+          joinDate: 'January 2024',
+          bio: 'System administrator with access to groundwater monitoring system.'
+        });
+        setActivities([]);
+        setAchievements([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const achievements = [
-    { title: 'Data Pioneer', description: 'First to analyze 10,000+ data points', icon: '🏆' },
-    { title: 'Alert Master', description: 'Created 50+ monitoring alerts', icon: '🔔' },
-    { title: 'Report Expert', description: 'Generated 100+ reports', icon: '📊' },
-    { title: 'Team Player', description: 'Collaborated on 25+ projects', icon: '🤝' },
-  ];
+    fetchProfile();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setProfileData(prev => ({
@@ -42,6 +78,18 @@ const UserProfile: React.FC = () => {
     setIsEditing(false);
     // Save logic would go here
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-6">
+        <GlassCard className="p-12">
+          <div className="flex items-center justify-center">
+            <LoadingSpinner />
+          </div>
+        </GlassCard>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -189,6 +237,12 @@ const UserProfile: React.FC = () => {
               <Award className="w-5 h-5 text-amber-400" />
               <span>Achievements</span>
             </h3>
+            {achievements.length === 0 ? (
+              <div className="text-center text-slate-400 py-8">
+                <Award className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No achievements yet</p>
+              </div>
+            ) : (
             <div className="space-y-4">
               {achievements.map((achievement, index) => (
                 <motion.div
@@ -206,6 +260,7 @@ const UserProfile: React.FC = () => {
                 </motion.div>
               ))}
             </div>
+            )}
           </GlassCard>
         </motion.div>
 
@@ -221,6 +276,12 @@ const UserProfile: React.FC = () => {
               <User className="w-5 h-5 text-teal-400" />
               <span>Recent Activity</span>
             </h3>
+            {activities.length === 0 ? (
+              <div className="text-center text-slate-400 py-8">
+                <User className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No recent activity</p>
+              </div>
+            ) : (
             <div className="space-y-4">
               {activities.map((activity, index) => (
                 <motion.div
@@ -244,6 +305,7 @@ const UserProfile: React.FC = () => {
                 </motion.div>
               ))}
             </div>
+            )}
           </GlassCard>
         </motion.div>
       </div>
